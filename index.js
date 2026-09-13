@@ -1,124 +1,115 @@
 const http = require('http');
-http.createServer((req, res) => res.end('Bot ishlamoqda!')).listen(process.env.PORT || 3000);
 const { Telegraf, Markup } = require('telegraf');
 
-// Bot tokenini kiriting
+// Render o'chib qolmasligi uchun HTTP server
+http.createServer((req, res) => res.end('Bot ishlamoqda!')).listen(process.env.PORT || 3000);
+
 const bot = new Telegraf(process.env.BOT_TOKEN || '8577543730:AAE1ToMRiPbSKfppI1JDIDeSl6qIbM6O37c');
 
-// Foydalanuvchi holatlarini saqlash uchun
+// Foydalanuvchi holatlarini va arxivni xotirada saqlash
 const userStates = {};
+const archives = {}; // har bir foydalanuvchi uchun lavhalar bazasi
 
-// Asosiy menyu tugmalari
 const mainMenu = Markup.keyboard([
-  ['📝 Zakadr Matni', '⏱ Xronometraj'],
-  ['📁 Lavhalar Arxivi', '🔍 Qidirish'],
-  ['🖥 Titr Tayyorlash', 'ℹ️ Yordam']
+  ['🎙 Zakadr Matni', '⏱ Xronometraj'],
+  ['📥 Lavha Saqlash', '📜 Lavhalar Arxivi'],
+  ['🎬 Titr Tayyorlash', 'ℹ️ Yordam']
 ]).resize();
 
-// Bosh menyu buyrug'i
 bot.start((ctx) => {
   const userId = ctx.from.id;
   userStates[userId] = null;
-  return ctx.reply("Elbekning yordamchisiga xush kelibsiz! Kerakli bo'limni tanlang:", mainMenu);
+  if (!archives[userId]) archives[userId] = [];
+  
+  ctx.reply(
+    `Assalomu alaykum, ${ctx.from.first_name}!\n\nElbekning TV yordamchisi botiga xush kelibsiz! Quyidagi menyudan kerakli bo'limni tanlang:`, 
+    mainMenu
+  );
 });
 
-// 📝 Zakadr Matni
-bot.hears('📝 Zakadr Matni', (ctx) => {
+// Lavha saqlash buyrug'i
+bot.hears('📥 Lavha Saqlash', (ctx) => {
   const userId = ctx.from.id;
-  userStates[userId] = 'awaiting_script';
-  return ctx.reply("Zakadr matnini yuboring. Men o'qilish vaqtini hisoblab beraman:");
+  userStates[userId] = 'AWAITING_ARCHIVE_ITEM';
+  ctx.reply('📥 Saqlamoqchi bo\'lgan lavha matnini yoki lavha nomini yuboring:\n\n(Mavzusi va qisqacha mazmunini yozishingiz mumkin)');
 });
 
-// ⏱ Xronometraj
+// Lavhalar arxivini ko'rish buyrug'i
+bot.hears('📜 Lavhalar Arxivi', (ctx) => {
+  const userId = ctx.from.id;
+  const userArchive = archives[userId] || [];
+
+  if (userArchive.length === 0) {
+    return ctx.reply('📜 Sizda hali saqlangan lavhalar yo\'q. "📥 Lavha Saqlash" tugmasi orqali yangi lavha qo\'shishingiz mumkin.');
+  }
+
+  let archiveList = '📜 **Sizning Saqlangan Lavhalaringiz:**\n\n';
+  userArchive.forEach((item, index) => {
+    archiveList += `${index + 1}. **${item.title}**\n📅 *Sana:* ${item.date}\n⏱ *O'qilish vaqti:* ~${item.time}\n------------------\n`;
+  });
+
+  ctx.reply(archiveList, { parse_mode: 'Markdown' });
+});
+
+bot.hears('🎙 Zakadr Matni', (ctx) => {
+  const userId = ctx.from.id;
+  userStates[userId] = 'AWAITING_ZAKADR';
+  ctx.reply('🎙 Zakadr matnini kiriting (bot so\'zlar soni va o\'qilish vaqtini hisoblab beradi):');
+});
+
 bot.hears('⏱ Xronometraj', (ctx) => {
-  const userId = ctx.from.id;
-  userStates[userId] = 'awaiting_chrono';
-  return ctx.reply("Xronometrajini hisoblash uchun matnni yuboring:");
+  ctx.reply('Xronometraj hisoblash uchun zakadr matnini yuboring.');
 });
 
-// 📁 Lavhalar Arxivi
-bot.hears('📁 Lavhalar Arxivi', (ctx) => {
-  return ctx.reply("📁 Lavhalar arxivi bo'limi. Hozircha saqlangan lavhalar yo'q.");
+bot.hears('🎬 Titr Tayyorlash', (ctx) => {
+  ctx.reply('🎬 Titr uchun ism-sharif va lavozimni kiriting (Masalan: *Eshmatov Tashmat - Jurnalist*):', { parse_mode: 'Markdown' });
 });
 
-// 🔍 Qidirish
-bot.hears('🔍 Qidirish', (ctx) => {
-  return ctx.reply("Qidirmoqchi bo'lgan kalit so'zingizni yuboring:");
-});
-
-// 🖥 Titr Tayyorlash
-bot.hears('🖥 Titr Tayyorlash', (ctx) => {
-  const userId = ctx.from.id;
-  userStates[userId] = 'awaiting_titr';
-  return ctx.reply("Titr uchun ma'lumotni ushbu formatda yuboring:\n\nIsm Familiya - Lavozim\n(Masalan: Elbek Aliyev - Telejurnalist)");
-});
-
-// ℹ️ Yordam
 bot.hears('ℹ️ Yordam', (ctx) => {
-  return ctx.reply("Ushbu bot TV jurnalistlar uchun zakadr matnlari xronometrajini hisoblash, titrlar tayyorlash va lavhalarni tartiblash uchun mo'ljallangan.");
+  ctx.reply('ℹ️ Ushbu bot TV jurnalistlar uchun zakadr matnlari xronometrajini hisoblash va lavhalarni tartibga solib arxivlashda yordam beradi.');
 });
 
-// Xabarlarni qayta ishlash mantiqiy qismi
+// Xabar va matnlarni qabul qilish va qayta ishlash
 bot.on('text', (ctx) => {
   const userId = ctx.from.id;
-  const state = userStates[userId];
   const text = ctx.message.text;
+  const currentState = userStates[userId];
 
-  if (state === 'awaiting_script' || state === 'awaiting_chrono') {
-    const words = text.trim().split(/\s+/).filter(word => word.length > 0).length;
-    const totalSeconds = Math.round(words / 2.3);
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
+  if (!archives[userId]) archives[userId] = [];
 
-    let timeString = '';
-    if (minutes > 0) {
-      timeString = `${minutes} daqiqa ${seconds} soniya`;
-    } else {
-      timeString = `${seconds} soniya`;
-    }
+  // Agar foydalanuvchi "Lavha Saqlash" holatida bo'lsa
+  if (currentState === 'AWAITING_ARCHIVE_ITEM') {
+    const words = text.trim().split(/\s+/).length;
+    const seconds = Math.ceil((words / 130) * 60);
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    const timeString = minutes > 0 ? `${minutes}m ${remainingSeconds}s` : `${seconds}s`;
+
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('uz-UZ');
+
+    archives[userId].push({
+      title: text.length > 50 ? text.substring(0, 50) + '...' : text,
+      fullText: text,
+      date: dateStr,
+      time: timeString
+    });
 
     userStates[userId] = null;
-
-    if (state === 'awaiting_script') {
-      return ctx.reply(
-        `📝 ZAKADR MATNI TAYYOR:\n\n` +
-        `${text}\n\n` +
-        `-------------------\n` +
-        `📊 So'zlar soni: ${words} ta\n` +
-        `⏱ Taxminiy o'qilish vaqti: ${timeString}`
-      );
-    } else {
-      return ctx.reply(
-        `⏱ XRONOMETRAJ NATIJASI:\n\n` +
-        `📊 Jami so'zlar: ${words} ta\n` +
-        `⏱ Efir vaqti: ${timeString}`
-      );
-    }
+    return ctx.reply('✅ Lavha muvaffaqiyatli arxivga saqlandi! Ularni "📜 Lavhalar Arxivi" bo\'limidan ko\'rishingiz mumkin.', mainMenu);
   }
 
-  if (state === 'awaiting_titr') {
-    userStates[userId] = null;
-    return ctx.reply(
-      `🖥 TITR TAYYOR:\n\n` +
-      `-------------------\n` +
-      `${text.toUpperCase()}\n` +
-      `-------------------`
-    );
-  }
+  // Odatiy zakadr matnini hisoblash
+  const words = text.trim().split(/\s+/).length;
+  const seconds = Math.ceil((words / 130) * 60);
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  let timeString = minutes > 0 ? `${minutes} daqiqa ${remainingSeconds} sekund` : `${seconds} sekund`;
 
-  return ctx.reply("Tushunmadim. Iltimos, menyudagi bo'limlardan birini tanlang.", mainMenu);
+  ctx.reply(`📝 **Zakadr matni tahlili:**\n\n- So'zlar soni: **${words} ta**\n- O'qilish vaqti: **~${timeString}**`, { parse_mode: 'Markdown' });
 });
 
-// Xatolar botni to'xtatib qo'ymasligi uchun
-bot.catch((err, ctx) => {
-  console.log(`Xatolik yuz berdi (${ctx.updateType}):`, err);
-});
+bot.launch();
 
-// Botni ishga tushirish
-bot.launch().then(() => {
-  console.log('Bot muvaffaqiyatli ishga tushdi!');
-});
-
-// Serverni to'xtatganda botni xavfsiz o'chirish
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
