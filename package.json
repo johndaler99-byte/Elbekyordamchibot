@@ -1,0 +1,12 @@
+{
+  "name": "elbek-tv-bot",
+  "version": "1.0.0",
+  "description": "TV Jurnalist yordamchisi boti",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "telegraf": "^4.15.3"
+  }
+}
