@@ -5,13 +5,14 @@ const mongoose = require('mongoose');
 // Render o'chib qolmasligi uchun HTTP server
 http.createServer((req, res) => res.end('Bot ishlamoqda!')).listen(process.env.PORT || 3000);
 
-// MongoDB bazasiga ulanish
-const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://johndaler99_db_user:ciymlPrQl9NQ3vYm@cluster0.gntfzmn.mongodb.net/tv_archive?retryWrites=true&w=majority';
+// Yangi va aniq MongoDB ulanish havolasi
+const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://johndaler99_db_user:ciymlPrQl9NQ3vYm@cluster0.f0angkx.mongodb.net/tv_archive?retryWrites=true&w=majority&appName=Cluster0';
+
 mongoose.connect(MONGO_URI)
   .then(() => console.log('MongoDB bazasiga muvaffaqiyatli ulandi!'))
   .catch(err => console.error('Baza ulanishida xatolik:', err));
 
-// Baza sxemasi (Model)
+// Database Sxemasi
 const VideoSchema = new mongoose.Schema({
   userId: Number,
   fileId: String,
@@ -42,10 +43,10 @@ bot.hears(['📜 Lavha Qo\'shish', '📜 Lavhalar Arxivi'], (ctx) => {
   ctx.reply('📹 Iltimos, efirga ketgan tayyor TV lavha **videofaylini** yuboring:');
 });
 
-// Arxivdagi videolarni bazadan ko'rish
+// Arxivdagi videolarni bazadan ko'rish (Har bir foydalanuvchiga faqat o'zinikini ko'rsatadi)
 bot.hears('📁 Mening Arxivim', async (ctx) => {
   const userId = ctx.from.id;
-  
+
   try {
     const userVideos = await ArchiveVideo.find({ userId: userId }).sort({ createdAt: -1 });
 
@@ -62,11 +63,12 @@ bot.hears('📁 Mening Arxivim', async (ctx) => {
       });
     }
   } catch (error) {
+    console.error(error);
     ctx.reply('Bazadan ma\'lumot olishda xatolik yuz berdi.');
   }
 });
 
-// Video faylni qabul qilish
+// Video qabul qilish
 bot.on('video', (ctx) => {
   const userId = ctx.from.id;
   const state = userStates[userId];
@@ -79,7 +81,7 @@ bot.on('video', (ctx) => {
   }
 });
 
-// Matnli ma'lumot va sana qabul qilish
+// Sana va soatni qabul qilib bazaga saqlash
 bot.on('text', async (ctx) => {
   const userId = ctx.from.id;
   const text = ctx.message.text;
@@ -94,13 +96,14 @@ bot.on('text', async (ctx) => {
       });
 
       userStates[userId] = null;
-      return ctx.reply(`🎉 **Muvaffaqiyatli bazaga saqlandi!**\n\n📅 Efir vaqti: ${text}\n\nVideolaringiz endi abadiy saqlanadi. Ularni **"📁 Mening Arxivim"** bo'limidan ko'rishingiz mumkin.`, mainMenu);
+      return ctx.reply(`🎉 **Muvaffaqiyatli bazaga saqlandi!**\n\n📅 Efir vaqti: ${text}\n\nVideolaringiz abadiy saqlanadi. Ularni **"📁 Mening Arxivim"** bo'limidan ko'rishingiz mumkin.`, mainMenu);
     } catch (err) {
+      console.error(err);
       return ctx.reply('Bazaga saqlashda xatolik bo\'ldi.');
     }
   }
 
-  // Zakadr matni hisoblash
+  // Zakadr matni hisobi
   const words = text.trim().split(/\s+/).length;
   const seconds = Math.ceil((words / 130) * 60);
   const minutes = Math.floor(seconds / 60);
