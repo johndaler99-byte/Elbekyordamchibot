@@ -6,7 +6,7 @@ http.createServer((req, res) => res.end('Bot ishlamoqda!')).listen(process.env.P
 
 const bot = new Telegraf(process.env.BOT_TOKEN || '8577543730:AAE1ToMRiPbSKfppI1JDIDeSl6qIbM6O37c');
 
-// Maxfiy kanal ID raqamingiz
+// Maxfiy kanal ID raqami
 const ARCHIVE_CHANNEL_ID = '-1003933435546';
 
 // Foydalanuvchilar holati (State management)
@@ -21,7 +21,7 @@ const mainMenu = Markup.keyboard([
 // /start komandasi
 bot.start((ctx) => {
   userStates[ctx.from.id] = null;
-  ctx.reply(`Assalomu alaykum, ${ctx.from.first_name}!\n\nElbekning TV yordamchisi botiga xush kelibsiz!`, mainMenu);
+  ctx.reply(`Assalomu alaykum, ${ctx.from.first_name}!\n\nElbekning TV yordamchisi botiga xush kelibsiz! Menyudan kerakli bo'limni tanlang:`, mainMenu);
 });
 
 // 1. LAVHA QO'SHISH
@@ -43,21 +43,10 @@ bot.on('video', (ctx) => {
   }
 });
 
-// 2. MENING ARXIVIM (Maxfiy kanaldan to'g'ridan-to'g'ri qidirib topadi)
+// 2. MENING ARXIVIM
 bot.hears('📁 Mening Arxivim', async (ctx) => {
-  const userId = ctx.from.id;
-  userStates[userId] = null;
-
-  try {
-    const statusMsg = await ctx.reply('🔍 Kanaldagi arxivlaringiz qidirilmoqda...');
-    
-    // Kanaldan foydalanuvchiga tegishli videolarni qidirish
-    // Telegram API orqali kanal xabarlarini tekshirish
-    ctx.reply(`📁 **Sizning arxiv videolaringiz maxfiy kanalingizda saqlanmoqda.**\n\nBarcha saqlangan lavhalaringizni to'g'ridan-to'g'ri arxiv kanalida tartib bilan ko'rish va yuklab olishingiz mumkin.`);
-  } catch (err) {
-    console.error(err);
-    ctx.reply('Arxivni yuklashda xatolik yuz berdi.');
-  }
+  userStates[ctx.from.id] = null;
+  ctx.reply(`📁 **Sizning arxiv videolaringiz maxfiy kanalda saqlanmoqda.**\n\nBarcha saqlangan lavhalaringizni maxfiy arxiv kanalida ko'rishingiz mumkin.`);
 });
 
 // 3. ZAKADR MATNI
@@ -80,10 +69,10 @@ bot.hears('⏱ Xronometraj', (ctx) => {
 
 bot.hears('ℹ️ Yordam', (ctx) => {
   userStates[ctx.from.id] = null;
-  ctx.reply('ℹ️ **Botdan foydalanish yo\'riqnomasi:**\n\n1. **📜 Lavha Qo\'shish** - TV lavha videosi va efir vaqtini maxfiy arxivga saqlaydi.\n2. **🎙 Zakadr Matni** - Matn xronometrajini sekundlargacha hisoblaydi.\n3. **🎬 Titr Tayyorlash** - Titrlarni to'g'ri shakllantirishga yordam beradi.');
+  ctx.reply(`ℹ️ **Botdan foydalanish yo'riqnomasi:**\n\n1. **📜 Lavha Qo'shish** - TV lavha videosi va efir vaqtini maxfiy arxivga saqlaydi.\n2. **🎙 Zakadr Matni** - Matn xronometrajini sekundlargacha hisoblaydi.\n3. **🎬 Titr Tayyorlash** - Titrlarni to'g'ri shakllantirishga yordam beradi.`);
 });
 
-// MATNLARNI BOSHQRISH (Chalkashmasligi uchun holat (state) bo'yicha ajratilgan)
+// MATNLARNI BOSHQRISH
 bot.on('text', async (ctx) => {
   const userId = ctx.from.id;
   const text = ctx.message.text;
