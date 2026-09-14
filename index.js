@@ -1,28 +1,16 @@
 const http = require('http');
 const { Telegraf, Markup } = require('telegraf');
-const mongoose = require('mongoose');
 
-// Render o'chib qolmasligi uchun HTTP server
+// Render serverini uyg'oq tutish uchun HTTP server
 http.createServer((req, res) => res.end('Bot ishlamoqda!')).listen(process.env.PORT || 3000);
 
-// Yangi va aniq MongoDB ulanish havolasi
-const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://johndaler99_db_user:ciymlPrQl9NQ3vYm@cluster0.f0angkx.mongodb.net/tv_archive?retryWrites=true&w=majority&appName=Cluster0';
-
-mongoose.connect(MONGO_URI)
-  .then(() => console.log('MongoDB bazasiga muvaffaqiyatli ulandi!'))
-  .catch(err => console.error('Baza ulanishida xatolik:', err));
-
-// Database Sxemasi
-const VideoSchema = new mongoose.Schema({
-  userId: Number,
-  fileId: String,
-  airTime: String,
-  createdAt: { type: Date, default: Date.now }
-});
-const ArchiveVideo = mongoose.model('ArchiveVideo', VideoSchema);
-
 const bot = new Telegraf(process.env.BOT_TOKEN || '8577543730:AAE1ToMRiPbSKfppI1JDIDeSl6qIbM6O37c');
+
+// Sizning maxfiy kanal ID raqamingiz
+const ARCHIVE_CHANNEL_ID = '-1003933435546'; 
+
 const userStates = {};
+const userArchives = {};
 
 const mainMenu = Markup.keyboard([
   ['🎙 Zakadr Matni', '⏱ Xronometraj'],
@@ -31,44 +19,16 @@ const mainMenu = Markup.keyboard([
 ]).resize();
 
 bot.start((ctx) => {
-  const userId = ctx.from.id;
-  userStates[userId] = null;
+  userStates[ctx.from.id] = null;
   ctx.reply(`Assalomu alaykum, ${ctx.from.first_name}!\n\nElbekning TV yordamchisi botiga xush kelibsiz! Menyudan kerakli bo'limni tanlang:`, mainMenu);
 });
 
-// Lavha qo'shish jarayoni
 bot.hears(['📜 Lavha Qo\'shish', '📜 Lavhalar Arxivi'], (ctx) => {
-  const userId = ctx.from.id;
-  userStates[userId] = { step: 'AWAITING_VIDEO' };
+  userStates[ctx.from.id] = { step: 'AWAITING_VIDEO' };
   ctx.reply('📹 Iltimos, efirga ketgan tayyor TV lavha **videofaylini** yuboring:');
 });
 
-// Arxivdagi videolarni bazadan ko'rish (Har bir foydalanuvchiga faqat o'zinikini ko'rsatadi)
-bot.hears('📁 Mening Arxivim', async (ctx) => {
-  const userId = ctx.from.id;
-
-  try {
-    const userVideos = await ArchiveVideo.find({ userId: userId }).sort({ createdAt: -1 });
-
-    if (userVideos.length === 0) {
-      return ctx.reply('📁 Sizda hali saqlangan lavha videolari yo\'q.');
-    }
-
-    await ctx.reply(`📁 **Sizning bazangizda ${userVideos.length} ta lavha saqlangan:**\n\nVideolar yuklanmoqda...`, { parse_mode: 'Markdown' });
-
-    for (let i = 0; i < userVideos.length; i++) {
-      const item = userVideos[i];
-      await ctx.replyWithVideo(item.fileId, {
-        caption: `🎬 **Lavha #${userVideos.length - i}**\n📅 **Efir vaqti:** ${item.airTime}`
-      });
-    }
-  } catch (error) {
-    console.error(error);
-    ctx.reply('Bazadan ma\'lumot olishda xatolik yuz berdi.');
-  }
-});
-
-// Video qabul qilish
+// Video faylni qabul qilish
 bot.on('video', (ctx) => {
   const userId = ctx.from.id;
   const state = userStates[userId];
@@ -81,7 +41,7 @@ bot.on('video', (ctx) => {
   }
 });
 
-// Sana va soatni qabul qilib bazaga saqlash
+// Sana va soatni qabul qilib, kanalga va xotiraga saqlash
 bot.on('text', async (ctx) => {
   const userId = ctx.from.id;
   const text = ctx.message.text;
@@ -89,21 +49,29 @@ bot.on('text', async (ctx) => {
 
   if (state && state.step === 'AWAITING_DATE') {
     try {
-      await ArchiveVideo.create({
-        userId: userId,
+      // 1. Videoni maxfiy kanalga saqlash
+      await ctx.telegram.sendVideo(ARCHIVE_CHANNEL_ID, state.fileId, {
+        caption: `👤 User: ${ctx.from.first_name} (${userId})\n📅 Efir: ${text}`
+      });
+
+      // 2. Foydalanuvchi ro'yxatiga qo'shish
+      if (!userArchives[userId]) {
+        userArchives[userId] = [];
+      }
+      userArchives[userId].push({
         fileId: state.fileId,
         airTime: text
       });
 
       userStates[userId] = null;
-      return ctx.reply(`🎉 **Muvaffaqiyatli bazaga saqlandi!**\n\n📅 Efir vaqti: ${text}\n\nVideolaringiz abadiy saqlanadi. Ularni **"📁 Mening Arxivim"** bo'limidan ko'rishingiz mumkin.`, mainMenu);
+      return ctx.reply(`🎉 **Muvaffaqiyatli saqlandi!**\n\n📅 Efir vaqti: ${text}\n\nVideolaringizni **"📁 Mening Arxivim"** bo'limidan ko'rishingiz mumkin.`, mainMenu);
     } catch (err) {
       console.error(err);
-      return ctx.reply('Bazaga saqlashda xatolik bo\'ldi.');
+      return ctx.reply('Videoni saqlashda xatolik bo\'ldi. Bot kanal admini ekanligini va post joylash huquqi borligini tekshiring.');
     }
   }
 
-  // Zakadr matni hisobi
+  // Zakadr matni hisoblash
   const words = text.trim().split(/\s+/).length;
   const seconds = Math.ceil((words / 130) * 60);
   const minutes = Math.floor(seconds / 60);
@@ -111,6 +79,23 @@ bot.on('text', async (ctx) => {
   let timeString = minutes > 0 ? `${minutes} daqiqa ${remainingSeconds} sekund` : `${seconds} sekund`;
 
   ctx.reply(`📝 **Zakadr matni tahlili:**\n\n- So'zlar soni: **${words} ta**\n- O'qilish vaqti: **~${timeString}**`, { parse_mode: 'Markdown' });
+});
+
+// Arxivdagi videolarni ko'rish
+bot.hears('📁 Mening Arxivim', async (ctx) => {
+  const userId = ctx.from.id;
+  const list = userArchives[userId] || [];
+
+  if (list.length === 0) {
+    return ctx.reply('📁 Sizda hali saqlangan lavha videolari yo\'q.');
+  }
+
+  await ctx.reply(`📁 **Sizning arxivda ${list.length} ta lavha bor:**`);
+  for (let i = 0; i < list.length; i++) {
+    await ctx.replyWithVideo(list[i].fileId, {
+      caption: `🎬 **Lavha #${list.length - i}**\n📅 **Efir vaqti:** ${list[i].airTime}`
+    });
+  }
 });
 
 bot.launch();
